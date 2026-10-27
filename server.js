@@ -14,7 +14,6 @@ const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const app = express();
-const app = express();
 app.set('trust proxy', 1); // di belakang proxy hosting, supaya link QR memakai https
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
