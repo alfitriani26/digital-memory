@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Masuk · Digital Memory</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">Digital <span>Memory</span></a>
+    </div>
+  </header>
+
+  <main class="container-narrow">
+    <div class="card card-pad stack">
+      <div class="tabs">
+        <button class="tab active" type="button" data-mode="login">Masuk</button>
+        <button class="tab" type="button" data-mode="register">Daftar</button>
+      </div>
+
+      <div id="error" class="alert alert-error hidden"></div>
+
+      <form id="form" class="stack" novalidate>
+        <div class="field" id="name-field">
+          <label for="name">Nama</label>
+          <input id="name" type="text" autocomplete="name" placeholder="Contoh: Raka &amp; Sinta" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="email" placeholder="nama@email.com" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="Minimal 6 karakter" />
+        </div>
+        <button id="submit" class="btn btn-primary btn-block" type="submit">Masuk</button>
+      </form>
+
+      <div class="alert alert-info small">
+        Mau lihat contoh dulu? Masuk dengan akun demo:<br />
+        <b>demo@digitalmemory.test</b> / <b>demo1234</b>
+        <div><button id="fill-demo" class="btn btn-sm mt" type="button">Isi otomatis</button></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/owner-login.js"></script>
+</body>
+</html>

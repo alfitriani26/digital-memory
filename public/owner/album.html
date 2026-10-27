@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kelola Album · Digital Memory</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/owner/dashboard.html">Digital <span>Memory</span></a>
+      <nav>
+        <a href="/owner/dashboard.html">← Semua album</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container stack">
+    <section class="row-between">
+      <div>
+        <h1 id="title" style="margin-bottom: 2px">...</h1>
+        <div id="subtitle" class="muted small"></div>
+      </div>
+      <div class="row">
+        <span id="status-badge" class="badge"></span>
+        <a id="guest-link" class="btn btn-sm" target="_blank" rel="noopener" href="#">Buka halaman tamu ↗</a>
+      </div>
+    </section>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" type="button" data-tab="photos">Foto <span class="count" id="c-photos">0</span></button>
+      <button class="tab" type="button" data-tab="requests">Permintaan akses <span class="count" id="c-requests">0</span></button>
+      <button class="tab" type="button" data-tab="messages">Pesan <span class="count" id="c-messages">0</span></button>
+      <button class="tab" type="button" data-tab="templates">Template <span class="count" id="c-templates">0</span></button>
+      <button class="tab" type="button" data-tab="settings">QR &amp; Pengaturan</button>
+    </div>
+
+    <section id="panel-photos" class="stack"></section>
+    <section id="panel-requests" class="stack hidden"></section>
+    <section id="panel-messages" class="stack hidden"></section>
+    <section id="panel-templates" class="stack hidden"></section>
+    <section id="panel-settings" class="stack hidden"></section>
+  </main>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/owner-album.js"></script>
+</body>
+</html>

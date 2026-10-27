@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Digital Memory</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">Digital <span>Memory</span></a>
+      <nav>
+        <a href="/owner/login.html">Masuk</a>
+        <a class="btn btn-primary btn-sm" href="/owner/login.html?mode=register">Buat Album</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Semua momen acara, terkumpul dalam satu album</h1>
+      <p>Tamu cukup scan QR, lalu unggah foto dan tulis kesan tanpa perlu daftar akun. Kamu yang memutuskan siapa boleh melihat apa.</p>
+      <div class="row" style="justify-content: center; margin-top: 16px">
+        <a class="btn btn-primary" href="/owner/login.html?mode=register">Mulai gratis</a>
+        <a class="btn" href="#kode">Aku punya kode album</a>
+      </div>
+    </section>
+
+    <div class="container" style="padding-top: 0">
+      <section class="features">
+        <div class="card feature"><div class="ico">📱</div><h3>Scan, lalu unggah</h3><p class="muted">Tanpa login. Foto langsung terunggah, dan ada waktu 3 detik untuk membatalkan.</p></div>
+        <div class="card feature"><div class="ico">🔒</div><h3>Publik atau privat</h3><p class="muted">Foto privat tampil buram untuk orang lain. Mereka bisa meminta akses ke pemiliknya.</p></div>
+        <div class="card feature"><div class="ico">💌</div><h3>Pesan dan kesan</h3><p class="muted">Tamu bisa menulis atau merekam ucapan suara untuk kalian.</p></div>
+        <div class="card feature"><div class="ico">🎨</div><h3>Template dan kolase</h3><p class="muted">Pilih template acara, susun beberapa foto jadi kolase, lalu unduh.</p></div>
+      </section>
+
+      <section id="kode" class="card card-pad mt center">
+        <h2>Punya kode album?</h2>
+        <p class="muted">Kode ada di bawah QR pada undangan atau layar acara.</p>
+        <form id="code-form" class="row" style="justify-content: center">
+          <input id="code-input" type="text" placeholder="Contoh: DEMO01" maxlength="12" autocomplete="off" style="max-width: 220px; text-transform: uppercase; text-align: center" />
+          <button class="btn btn-primary" type="submit">Buka album</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <footer>Digital Memory · prototype tugas UI/UX</footer>
+
+  <script>
+    document.getElementById('code-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var code = document.getElementById('code-input').value.trim().toUpperCase();
+      if (code) location.href = '/a/' + encodeURIComponent(code);
+    });
+  </script>
+</body>
+</html>

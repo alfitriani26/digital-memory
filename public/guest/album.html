@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Album Acara · Digital Memory</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main class="container-narrow stack" id="page">
+    <section class="card card-pad center" id="hero">
+      <div class="spinner"></div>
+    </section>
+
+    <div id="content" class="stack hidden">
+      <div class="tabs" id="tabs">
+        <button class="tab active" type="button" data-tab="public">Publik <span class="count" id="c-public">0</span></button>
+        <button class="tab" type="button" data-tab="private">Privat <span class="count" id="c-private">0</span></button>
+        <button class="tab" type="button" data-tab="messages">Pesan <span class="count" id="c-messages">0</span></button>
+      </div>
+      <section id="panel-photos" class="stack"></section>
+      <section id="panel-messages" class="stack hidden"></section>
+    </div>
+  </main>
+
+  <div class="bottombar hidden" id="bottombar">
+    <div class="inner">
+      <button class="btn btn-primary" type="button" id="btn-upload">📷 Unggah</button>
+      <button class="btn" type="button" id="btn-collage">🎨 Kolase</button>
+    </div>
+  </div>
+
+  <!-- pemilih file tersembunyi: galeri, kamera bawaan HP, dan rekam video -->
+  <input type="file" id="in-gallery" accept="image/*,video/*" multiple hidden />
+  <input type="file" id="in-camera" accept="image/*" capture="environment" hidden />
+  <input type="file" id="in-video" accept="video/*" capture="environment" hidden />
+
+  <script src="/js/common.js"></script>
+  <script src="/js/layout.js"></script>
+  <script src="/js/guest.js"></script>
+</body>
+</html>

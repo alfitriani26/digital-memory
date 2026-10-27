@@ -1,0 +1,22 @@
+{
+  "name": "digital-memory",
+  "version": "1.0.0",
+  "description": "Digital Memory - platform berbagi foto kolektif untuk acara (prototype tugas UI/UX)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node seed.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.4.0",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.5"
+  }
+}

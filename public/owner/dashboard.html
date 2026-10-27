@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard · Digital Memory</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/owner/dashboard.html">Digital <span>Memory</span></a>
+      <nav>
+        <span id="hello" class="muted small"></span>
+        <button id="logout" class="btn btn-sm" type="button">Keluar</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container stack">
+    <section class="card card-pad row-between">
+      <div>
+        <div class="small muted">Paket kamu</div>
+        <h2 id="plan-name" style="margin: 0">...</h2>
+        <div id="plan-detail" class="small muted"></div>
+      </div>
+      <button id="change-plan" class="btn" type="button">Ganti paket</button>
+    </section>
+
+    <section class="row-between">
+      <h2 style="margin: 0">Album acara</h2>
+      <button id="new-album" class="btn btn-primary" type="button">+ Buat album</button>
+    </section>
+
+    <div id="albums" class="album-grid"></div>
+  </main>
+
+  <script src="/js/common.js"></script>
+  <script src="/js/owner-dashboard.js"></script>
+</body>
+</html>
