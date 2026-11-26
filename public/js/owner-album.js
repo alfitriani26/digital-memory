@@ -6,13 +6,18 @@ const API = '/api/albums/' + albumId;
 
 const state = { album: null, me: null, photos: [], requests: [], messages: [], templates: [], limit: 1, themeKeys: [], filter: 'all' };
 
-const THEMES = {
-  floral: { label: 'Floral', icon: '🌸', bg: 'linear-gradient(135deg,#f8d7df,#fdf3f5)' },
-  y2k: { label: 'Y2K', icon: '✨', bg: 'linear-gradient(135deg,#c9b6ff,#8ff0ff)' },
-  cream: { label: 'Krem', icon: '🤍', bg: 'linear-gradient(135deg,#f6ead7,#fffaf0)' },
-  elegant: { label: 'Elegan', icon: '🖤', bg: 'linear-gradient(135deg,#2b2430,#6b5a3c)' },
-};
-const themeLabel = (key) => (THEMES[key] ? THEMES[key].label : key);
+const themeLabel = (key) => (THEMES[key] ? THEMES[key].name : key);
+
+function renderThemeThumb(key) {
+  const c = document.createElement('canvas');
+  c.width = 216;
+  c.height = 270;
+  c.style.cssText = 'width:100%;aspect-ratio:4/5;display:block';
+  const ctx = c.getContext('2d');
+  ctx.scale(0.2, 0.2);
+  if (THEMES[key]) THEMES[key].draw(ctx);
+  return c;
+}
 
 // ---------- tab ----------
 function showTab(name) {
@@ -219,16 +224,116 @@ function renderMessages() {
 }
 
 // ---------- template ----------
-function templatePreview(t) {
-  if (t.kind === 'image') return `<img src="${esc(t.image_url)}" alt="" />`;
-  const th = THEMES[t.theme_key] || { icon: '🎨', bg: '#eee' };
-  return `<div style="aspect-ratio:4/5;background:${th.bg};display:flex;align-items:center;justify-content:center;font-size:2rem">${th.icon}</div>`;
+const TPL_PRESETS = {
+  '1': [{ x: 0.08, y: 0.08, w: 0.84, h: 0.75 }],
+  '2v': [{ x: 0.08, y: 0.08, w: 0.84, h: 0.36 }, { x: 0.08, y: 0.46, w: 0.84, h: 0.36 }],
+  '2h': [{ x: 0.08, y: 0.14, w: 0.41, h: 0.62 }, { x: 0.51, y: 0.14, w: 0.41, h: 0.62 }],
+  '3a': [{ x: 0.08, y: 0.08, w: 0.84, h: 0.42 }, { x: 0.08, y: 0.52, w: 0.41, h: 0.31 }, { x: 0.51, y: 0.52, w: 0.41, h: 0.31 }],
+  '4g': [{ x: 0.08, y: 0.08, w: 0.41, h: 0.36 }, { x: 0.51, y: 0.08, w: 0.41, h: 0.36 }, { x: 0.08, y: 0.46, w: 0.41, h: 0.36 }, { x: 0.51, y: 0.46, w: 0.41, h: 0.36 }],
+};
+
+// Mendeteksi kotak-kotak slot foto:
+// 1) Lubang transparan (PNG alpha < 40) -> overlay = true
+// 2) Kotak solid/datar (JPG/PNG non-transparan, misal kotak putih/abu/gelap) -> overlay = false
+function detectTemplateSlots(img) {
+  const W = 270;
+  const H = 338;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
+  const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+  const dw = img.naturalWidth * s;
+  const dh = img.naturalHeight * s;
+  ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  const { data } = ctx.getImageData(0, 0, W, H);
+  const queue = new Int32Array(W * H);
+
+  function collectRegions(isSeed, canJoin, minRect = 0.65) {
+    const seen = new Uint8Array(W * H);
+    const regions = [];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const start = y * W + x;
+        if (seen[start] || !isSeed(start)) continue;
+        let head = 0, tail = 0;
+        queue[tail++] = start;
+        seen[start] = 1;
+        let minX = x, maxX = x, minY = y, maxY = y;
+        const sr = data[start * 4], sg = data[start * 4 + 1], sb = data[start * 4 + 2];
+        while (head < tail) {
+          const idx = queue[head++];
+          const cx = idx % W;
+          const cy = (idx - cx) / W;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
+          if (cx > 0 && !seen[idx - 1] && canJoin(idx - 1, sr, sg, sb)) { seen[idx - 1] = 1; queue[tail++] = idx - 1; }
+          if (cx + 1 < W && !seen[idx + 1] && canJoin(idx + 1, sr, sg, sb)) { seen[idx + 1] = 1; queue[tail++] = idx + 1; }
+          if (cy > 0 && !seen[idx - W] && canJoin(idx - W, sr, sg, sb)) { seen[idx - W] = 1; queue[tail++] = idx - W; }
+          if (cy + 1 < H && !seen[idx + W] && canJoin(idx + W, sr, sg, sb)) { seen[idx + W] = 1; queue[tail++] = idx + W; }
+        }
+        const bw = maxX - minX + 1;
+        const bh = maxY - minY + 1;
+        const w = bw / W;
+        const h = bh / H;
+        const rectRatio = tail / (bw * bh);
+        const touchesAllSides = (minX <= 1 && maxX >= W - 2) || (minY <= 1 && maxY >= H - 2);
+        if (w >= 0.08 && h >= 0.08 && w * h <= 0.85 && !touchesAllSides && tail >= W * H * 0.01 && rectRatio >= minRect) {
+          regions.push({
+            x: Math.round((minX / W) * 1000) / 1000,
+            y: Math.round((minY / H) * 1000) / 1000,
+            w: Math.round(w * 1000) / 1000,
+            h: Math.round(h * 1000) / 1000,
+            area: tail,
+          });
+        }
+      }
+    }
+    regions.sort((a, b) => b.area - a.area);
+    const picked = regions.slice(0, 6).sort((a, b) => (Math.abs(a.y - b.y) > 0.08 ? a.y - b.y : a.x - b.x));
+    return picked.map(({ x, y, w, h }) => ({ x, y, w, h }));
+  }
+
+  // Pass 1: lubang transparan (PNG)
+  const alphaSlots = collectRegions(
+    (i) => data[i * 4 + 3] < 40,
+    (i) => data[i * 4 + 3] < 40,
+    0.55
+  );
+  if (alphaSlots.length) return { slots: alphaSlots, overlay: true };
+
+  // Pass 2: kotak datar/solid (putih, abu, hitam, atau warna seragam di dalam frame)
+  const isFlat = (i) => {
+    const x = i % W, y = (i - x) / W;
+    if (x <= 1 || x >= W - 2 || y <= 1 || y >= H - 2) return false;
+    const p = i * 4, r = (i + 1) * 4, d = (i + W) * 4;
+    const gx = Math.abs(data[p] - data[r]) + Math.abs(data[p + 1] - data[r + 1]) + Math.abs(data[p + 2] - data[r + 2]);
+    const gy = Math.abs(data[p] - data[d]) + Math.abs(data[p + 1] - data[d + 1]) + Math.abs(data[p + 2] - data[d + 2]);
+    return gx + gy < 20;
+  };
+  const solidSlots = collectRegions(
+    (i) => isFlat(i),
+    (i, sr, sg, sb) => {
+      const p = i * 4;
+      return isFlat(i) && Math.abs(data[p] - sr) + Math.abs(data[p + 1] - sg) + Math.abs(data[p + 2] - sb) < 30;
+    },
+    0.72
+  );
+  return { slots: solidSlots, overlay: false };
 }
 
-function renderTemplates() {
+function templatePreview(t) {
+  if (t.kind === 'image') return `<img src="${esc(t.image_url)}" alt="" />`;
+  return `<div class="tpl-thumb-slot" data-theme-thumb="${esc(t.theme_key)}"></div>`;
+}
+
+function renderTemplates(editing = null) {
   const box = $('#panel-templates');
   const full = state.templates.length >= state.limit;
   const planName = state.me ? state.me.planInfo.label : '';
+  const isEdit = Boolean(editing);
 
   box.innerHTML = `
     <div class="alert alert-info small">Template adalah bingkai atau latar yang dipilih tamu saat membuat kolase foto. Paket ${esc(planName)} boleh membuat <b>${state.limit}</b> template untuk album ini (terpakai ${state.templates.length}).</div>
@@ -241,8 +346,16 @@ function renderTemplates() {
     const el = document.createElement('div');
     el.className = 'tpl';
     el.style.cursor = 'default';
-    el.innerHTML = `${templatePreview(t)}<span>${esc(t.name)}</span><div style="padding:0 6px 8px"><button class="btn btn-sm btn-danger btn-block" type="button">Hapus</button></div>`;
-    $('button', el).addEventListener('click', async () => {
+    el.innerHTML = `${templatePreview(t)}<span>${esc(t.name)}</span>
+      <div class="row" style="padding:0 6px 8px;gap:6px">
+        <button class="btn btn-sm grow" type="button" data-edit>Edit</button>
+        <button class="btn btn-sm btn-danger grow" type="button" data-del>Hapus</button>
+      </div>`;
+    $('[data-edit]', el).addEventListener('click', () => {
+      renderTemplates(t);
+      $('#tpl-form-box', box).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    $('[data-del]', el).addEventListener('click', async () => {
       if (!confirm(`Hapus template "${t.name}"?`)) return;
       try {
         await api(`${API}/templates/${t.id}`, { method: 'DELETE' });
@@ -253,43 +366,250 @@ function renderTemplates() {
       }
     });
     $('#tpl-grid', box) && $('#tpl-grid', box).appendChild(el);
+    const thumbSlot = $('[data-theme-thumb]', el);
+    if (thumbSlot) thumbSlot.replaceWith(renderThemeThumb(t.theme_key));
   });
 
   const formBox = $('#tpl-form-box', box);
-  if (full) {
+  if (full && !isEdit) {
     formBox.innerHTML = `<b>Batas template sudah tercapai.</b>
-      <span class="muted small">${state.me && state.me.plan === 'basic' ? 'Ganti ke paket Premium untuk membuat sampai 5 template.' : 'Hapus salah satu template untuk menambah yang baru.'}</span>
+      <span class="muted small">${state.me && state.me.plan === 'basic' ? 'Ganti ke paket Premium untuk membuat sampai 5 template.' : 'Edit atau hapus salah satu template untuk mengganti.'}</span>
       ${state.me && state.me.plan === 'basic' ? '<a class="btn btn-primary" href="/owner/dashboard.html">Lihat paket</a>' : ''}`;
     return;
   }
+
+  const cfg = editing && editing.layout_config ? editing.layout_config : null;
+  const editor = {
+    slots: (cfg && Array.isArray(cfg.slots) && cfg.slots.length ? cfg.slots : TPL_PRESETS['1']).map((s) => ({ ...s })),
+    frame: cfg && cfg.frame ? { ...cfg.frame } : { color: '#ffffff', border: 12, radius: 14, shadow: true },
+    overlay: Boolean(cfg && cfg.overlay),
+    active: 0,
+    url: null,
+  };
+
   formBox.innerHTML = `
-    <h3>Tambah template</h3>
+    <div class="row-between">
+      <h3>${isEdit ? `Edit template: ${esc(editing.name)}` : 'Tambah template'}</h3>
+      ${isEdit ? '<button class="btn btn-sm" type="button" id="t-cancel-edit">Batal edit</button>' : ''}
+    </div>
     <form class="stack" novalidate>
-      <div class="field"><label for="t-name">Nama template</label><input id="t-name" type="text" maxlength="40" placeholder="Contoh: Pink Floral" /></div>
+      <div class="field"><label for="t-name">Nama template</label><input id="t-name" type="text" maxlength="40" placeholder="Contoh: Pink Floral" value="${esc(editing ? editing.name : '')}" /></div>
       <div class="field"><label>Jenis</label>
         <div class="segmented">
-          <label><input type="radio" name="kind" value="theme" checked /><span>Tema bawaan</span></label>
-          <label><input type="radio" name="kind" value="image" /><span>Gambar sendiri</span></label>
+          <label><input type="radio" name="kind" value="theme" ${!editing || editing.kind === 'theme' ? 'checked' : ''} /><span>Tema bawaan</span></label>
+          <label><input type="radio" name="kind" value="image" ${editing && editing.kind === 'image' ? 'checked' : ''} /><span>Gambar sendiri</span></label>
         </div>
       </div>
-      <div class="field" id="t-theme-box"><label for="t-theme">Pilih tema</label>
-        <select id="t-theme">${state.themeKeys.map((k) => `<option value="${esc(k)}">${esc(themeLabel(k))}</option>`).join('')}</select>
+      <div class="field" id="t-theme-box"><label>Pilih tema</label>
+        <input id="t-theme" type="hidden" value="${esc(editing && editing.theme_key ? editing.theme_key : state.themeKeys[0] || 'floral')}" />
+        <div class="tpl-grid" id="t-theme-picker"></div>
       </div>
-      <div class="field hidden" id="t-image-box"><label for="t-image">Gambar latar</label>
+      <div class="field hidden" id="t-image-box"><label for="t-image">${isEdit && editing.kind === 'image' ? 'Ganti gambar (opsional)' : 'Gambar latar / frame'}</label>
         <input id="t-image" type="file" accept="image/*" />
-        <span class="hint">Disarankan rasio potret 4:5 (misalnya 1080 × 1350). Maksimal 8 MB.</span>
+        <span class="hint">Disarankan rasio potret 4:5 (misalnya 1080 × 1350). PNG berlubang transparan akan otomatis terdeteksi slotnya.</span>
+        <div class="tpl-editor-grid hidden" id="t-slot-editor" style="margin-top:10px">
+          <div class="stack" style="gap:6px">
+            <div class="tpl-stage" id="t-editor-stage">
+              <img id="t-editor-bg" alt="" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none" />
+              <div id="t-editor-slots" style="position:absolute;inset:0"></div>
+            </div>
+            <span class="hint" style="text-align:center">Seret kotak untuk geser · Seret ↘ untuk ubah ukuran</span>
+          </div>
+          <div class="tpl-controls">
+            <div class="tpl-panel">
+              <div class="row-between">
+                <b>Posisi &amp; jumlah slot</b>
+                <button class="btn btn-sm" type="button" id="t-auto-detect">✨ Deteksi otomatis</button>
+              </div>
+              <div class="row" style="gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" type="button" data-preset="1">1 foto</button>
+                <button class="btn btn-sm" type="button" data-preset="2v">2 atas-bawah</button>
+                <button class="btn btn-sm" type="button" data-preset="2h">2 kiri-kanan</button>
+                <button class="btn btn-sm" type="button" data-preset="3a">3 foto</button>
+                <button class="btn btn-sm" type="button" data-preset="4g">4 grid</button>
+              </div>
+              <div class="row" style="gap:6px">
+                <button class="btn btn-sm grow" type="button" id="t-add-slot">+ Slot</button>
+                <button class="btn btn-sm btn-danger grow" type="button" id="t-del-slot">Hapus slot</button>
+              </div>
+              <div class="small muted" id="t-slot-info"></div>
+            </div>
+            <div class="tpl-panel">
+              <b>Gaya bingkai &amp; lapisan</b>
+              <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+                <label class="small" style="display:flex;align-items:center;gap:6px">Warna <input id="t-frame-color" type="color" value="${esc(editor.frame.color)}" style="width:34px;height:28px;padding:0;border:none;background:none;cursor:pointer" /></label>
+                <label class="small" style="display:flex;align-items:center;gap:6px">Tebal <input id="t-frame-border" type="range" min="0" max="30" value="${editor.frame.border}" style="width:84px" /><span id="t-val-border">${editor.frame.border}px</span></label>
+                <label class="small" style="display:flex;align-items:center;gap:6px">Sudut <input id="t-frame-radius" type="range" min="0" max="60" value="${editor.frame.radius}" style="width:84px" /><span id="t-val-radius">${editor.frame.radius}px</span></label>
+              </div>
+              <label class="small" style="display:flex;align-items:center;gap:6px"><input id="t-frame-shadow" type="checkbox" ${editor.frame.shadow ? 'checked' : ''} /> Bayangan</label>
+              <label class="small" style="display:flex;align-items:center;gap:6px"><input id="t-frame-overlay" type="checkbox" ${editor.overlay ? 'checked' : ''} /> Frame di atas foto (PNG transparan)</label>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="field"><label for="t-caption">Tulisan di bawah kolase (opsional)</label><input id="t-caption" type="text" maxlength="80" placeholder="Contoh: Raka &amp; Sinta · 21 Oktober 2026" /></div>
-      <button class="btn btn-primary" type="submit">Simpan template</button>
+      <div class="field"><label for="t-caption">Tulisan di bawah kolase (opsional)</label><input id="t-caption" type="text" maxlength="80" placeholder="Contoh: Raka &amp; Sinta · 21 Oktober 2026" value="${esc(editing && editing.caption ? editing.caption : '')}" /></div>
+      <button class="btn btn-primary" type="submit">${isEdit ? 'Simpan perubahan' : 'Simpan template'}</button>
     </form>`;
 
+  if (isEdit) {
+    $('#t-cancel-edit', formBox).addEventListener('click', () => renderTemplates(null));
+  }
+
   const form = $('form', formBox);
+  const bgEl = $('#t-editor-bg', form);
+
+  const themeInput = $('#t-theme', form);
+  const themePicker = $('#t-theme-picker', form);
+  state.themeKeys.forEach((k) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tpl' + (k === themeInput.value ? ' active' : '');
+    btn.appendChild(renderThemeThumb(k));
+    const span = document.createElement('span');
+    span.textContent = themeLabel(k);
+    btn.appendChild(span);
+    btn.addEventListener('click', () => {
+      themeInput.value = k;
+      $$('.tpl', themePicker).forEach((x) => x.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    themePicker.appendChild(btn);
+  });
+
+  function drawSlotEditor() {
+    const wrap = $('#t-editor-slots', form);
+    const stage = $('#t-editor-stage', form);
+    if (!wrap || !stage) return;
+    const scale = (stage.clientWidth || 340) / 1080;
+    const b = Math.round(editor.frame.border * scale);
+    const r = Math.round(editor.frame.radius * scale);
+    wrap.innerHTML = '';
+    editor.slots.forEach((s, i) => {
+      const boxEl = document.createElement('div');
+      const isActive = i === editor.active;
+      boxEl.style.cssText = `position:absolute;left:${s.x * 100}%;top:${s.y * 100}%;width:${s.w * 100}%;height:${s.h * 100}%;box-sizing:border-box;border:${Math.max(2, b)}px solid ${editor.frame.color};border-radius:${r}px;background:rgba(255,255,255,0.28);cursor:move;display:flex;align-items:center;justify-content:center;${editor.frame.shadow ? 'box-shadow:0 4px 12px rgba(0,0,0,0.25);' : ''}${isActive ? 'outline:2px dashed #e11d48;outline-offset:2px;' : ''}`;
+      boxEl.innerHTML = `<span style="background:rgba(0,0,0,0.68);color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;pointer-events:none">Foto ${i + 1}</span>
+        <div data-resize="${i}" style="position:absolute;right:-4px;bottom:-4px;width:20px;height:20px;background:#e11d48;color:#fff;border-radius:5px;font-size:12px;line-height:20px;text-align:center;cursor:nwse-resize">↘</div>`;
+      boxEl.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        editor.active = i;
+        const rect = stage.getBoundingClientRect();
+        const resizing = ev.target && ev.target.dataset && ev.target.dataset.resize !== undefined;
+        const startX = ev.clientX, startY = ev.clientY;
+        const orig = { ...s };
+        drawSlotEditor();
+        const onMove = (mv) => {
+          const dx = (mv.clientX - startX) / rect.width;
+          const dy = (mv.clientY - startY) / rect.height;
+          if (resizing) {
+            editor.slots[i].w = Math.max(0.08, Math.min(1 - orig.x, orig.w + dx));
+            editor.slots[i].h = Math.max(0.08, Math.min(1 - orig.y, orig.h + dy));
+          } else {
+            editor.slots[i].x = Math.max(0, Math.min(1 - orig.w, orig.x + dx));
+            editor.slots[i].y = Math.max(0, Math.min(1 - orig.h, orig.y + dy));
+          }
+          drawSlotEditor();
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+      wrap.appendChild(boxEl);
+    });
+    const cur = editor.slots[editor.active];
+    $('#t-slot-info', form).textContent = cur
+      ? `Slot ${editor.active + 1} aktif: posisi (${Math.round(cur.x * 100)}%, ${Math.round(cur.y * 100)}%) · ukuran ${Math.round(cur.w * 100)}% × ${Math.round(cur.h * 100)}%`
+      : '';
+    $('#t-del-slot', form).disabled = editor.slots.length <= 1;
+    $('#t-add-slot', form).disabled = editor.slots.length >= 6;
+  }
+
+  function runAutoDetect(silent) {
+    if (!bgEl.complete || !bgEl.naturalWidth) return;
+    try {
+      const { slots: found, overlay } = detectTemplateSlots(bgEl);
+      if (found.length) {
+        editor.slots = found;
+        editor.active = 0;
+        editor.overlay = overlay;
+        $('#t-frame-overlay', form).checked = overlay;
+        drawSlotEditor();
+        toast(`Terdeteksi ${found.length} slot kotak! Anda tetap bisa menggeser atau mengeditnya.`);
+      } else if (!silent) {
+        toast('Tidak ditemukan kotak otomatis. Silakan atur slot secara manual atau pilih preset.', true);
+      }
+    } catch {
+      if (!silent) toast('Gagal mendeteksi kotak pada gambar.', true);
+    }
+  }
+
+  $('#t-image', form).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (editor.url) { URL.revokeObjectURL(editor.url); editor.url = null; }
+    if (!file) return;
+    editor.url = URL.createObjectURL(file);
+    bgEl.onload = () => {
+      $('#t-slot-editor', form).classList.remove('hidden');
+      requestAnimationFrame(() => {
+        drawSlotEditor();
+        runAutoDetect(true);
+      });
+    };
+    bgEl.src = editor.url;
+  });
+
+  if (isEdit && editing.kind === 'image' && editing.image_url) {
+    bgEl.onload = () => {
+      $('#t-slot-editor', form).classList.remove('hidden');
+      requestAnimationFrame(drawSlotEditor);
+    };
+    bgEl.src = editing.image_url;
+  }
+
+  $('#t-auto-detect', form).addEventListener('click', () => runAutoDetect(false));
+  $$('[data-preset]', form).forEach((btn) => btn.addEventListener('click', () => {
+    editor.slots = (TPL_PRESETS[btn.dataset.preset] || TPL_PRESETS['1']).map((s) => ({ ...s }));
+    editor.active = 0;
+    drawSlotEditor();
+  }));
+  $('#t-add-slot', form).addEventListener('click', () => {
+    if (editor.slots.length >= 6) return;
+    const n = editor.slots.length;
+    editor.slots.push({ x: Math.min(0.6, 0.1 + n * 0.06), y: Math.min(0.6, 0.1 + n * 0.06), w: 0.35, h: 0.3 });
+    editor.active = n;
+    drawSlotEditor();
+  });
+  $('#t-del-slot', form).addEventListener('click', () => {
+    if (editor.slots.length <= 1) return;
+    editor.slots.splice(editor.active, 1);
+    editor.active = Math.max(0, editor.active - 1);
+    drawSlotEditor();
+  });
+  $('#t-frame-color', form).addEventListener('input', (e) => { editor.frame.color = e.target.value; drawSlotEditor(); });
+  $('#t-frame-border', form).addEventListener('input', (e) => {
+    editor.frame.border = Number(e.target.value);
+    $('#t-val-border', form).textContent = `${editor.frame.border}px`;
+    drawSlotEditor();
+  });
+  $('#t-frame-radius', form).addEventListener('input', (e) => {
+    editor.frame.radius = Number(e.target.value);
+    $('#t-val-radius', form).textContent = `${editor.frame.radius}px`;
+    drawSlotEditor();
+  });
+  $('#t-frame-shadow', form).addEventListener('change', (e) => { editor.frame.shadow = e.target.checked; drawSlotEditor(); });
+  $('#t-frame-overlay', form).addEventListener('change', (e) => { editor.overlay = e.target.checked; });
+
   const sync = () => {
     const kind = form.elements.kind.value;
     $('#t-theme-box', form).classList.toggle('hidden', kind !== 'theme');
     $('#t-image-box', form).classList.toggle('hidden', kind !== 'image');
   };
   $$('input[name=kind]', form).forEach((r) => r.addEventListener('change', sync));
+  sync();
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const kind = form.elements.kind.value;
@@ -302,15 +622,18 @@ function renderTemplates() {
     if (kind === 'theme') fd.append('theme_key', $('#t-theme', form).value);
     else {
       const file = $('#t-image', form).files[0];
-      if (!file) return toast('Pilih gambar latar dulu.', true);
-      fd.append('image', file);
+      if (!file && (!isEdit || editing.kind !== 'image')) return toast('Pilih gambar latar dulu.', true);
+      if (file) fd.append('image', file);
+      fd.append('layout_config', JSON.stringify({ slots: editor.slots, frame: editor.frame, overlay: editor.overlay }));
     }
     const button = $('button[type=submit]', form);
     button.disabled = true;
     try {
-      await api(`${API}/templates`, { method: 'POST', body: fd });
+      const url = isEdit ? `${API}/templates/${editing.id}` : `${API}/templates`;
+      await api(url, { method: isEdit ? 'PUT' : 'POST', body: fd });
+      if (editor.url) URL.revokeObjectURL(editor.url);
       await loadTemplates();
-      toast('Template tersimpan.');
+      toast(isEdit ? 'Template diperbarui.' : 'Template tersimpan.');
     } catch (err) {
       toast(err.message, true);
       button.disabled = false;

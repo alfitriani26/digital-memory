@@ -67,6 +67,10 @@ function photoView(p, acc) {
 }
 
 function templateView(t) {
+  let layout_config = null;
+  if (t.layout_config) {
+    try { layout_config = JSON.parse(t.layout_config); } catch { layout_config = null; }
+  }
   return {
     id: t.id,
     name: t.name,
@@ -74,6 +78,7 @@ function templateView(t) {
     theme_key: t.theme_key,
     caption: t.caption,
     image_url: t.kind === 'image' ? `/media/template/${t.id}` : null,
+    layout_config,
   };
 }
 

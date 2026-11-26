@@ -242,3 +242,20 @@ input[type='color'] { width: 56px; height: 40px; padding: 2px; border: 1px solid
 @keyframes spin { to { transform: rotate(360deg); } }
 
 footer { text-align: center; color: var(--muted); font-size: 0.82rem; padding: 24px 16px; }
+
+input[type='file'] {
+  width: 100%; padding: 8px 10px; border: 1.5px dashed var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer;
+}
+input[type='file']:hover { border-color: var(--accent-dark); }
+input[type='file']::file-selector-button {
+  margin-right: 12px; padding: 7px 14px; border: 1px solid var(--accent-dark); border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-dark); font: inherit; font-weight: 600; font-size: 0.86rem; cursor: pointer;
+}
+input[type='file']::file-selector-button:hover { background: var(--accent-dark); color: #fff; }
+
+.tpl-editor-grid { display: grid; grid-template-columns: minmax(240px, 340px) 1fr; gap: 18px; align-items: start; }
+@media (max-width: 720px) { .tpl-editor-grid { grid-template-columns: 1fr; } }
+.tpl-stage { position: relative; width: 100%; max-width: 340px; aspect-ratio: 4 / 5; margin: 0 auto; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); background: repeating-conic-gradient(#f3eef0 0% 25%, #fff 0% 50%) 50% / 16px 16px; user-select: none; touch-action: none; }
+.tpl-controls { display: flex; flex-direction: column; gap: 12px; }
+.tpl-panel { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); display: flex; flex-direction: column; gap: 10px; }

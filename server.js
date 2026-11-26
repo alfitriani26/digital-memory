@@ -40,7 +40,13 @@ app.get('/', (req, res, next) => {
   next();
 });
 
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, {
+  setHeaders(res, filePath) {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
 
 // ---------- Penanganan error ----------
 app.use((err, req, res, next) => {
