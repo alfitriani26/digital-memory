@@ -17,7 +17,7 @@ const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 // ---------- aturan akses (juga dipakai oleh routes/guest.js) ----------
 //
 // Boleh MELIHAT jernih : foto publik, pemilik album, pengupload, atau tamu yang permintaannya disetujui.
-// Boleh MEMAKAI/UNDUH   : pemilik album, pengupload, atau (foto publik yang diizinkan pengupload untuk template).
+// Boleh MEMAKAI/UNDUH   : pemilik album, pengupload, (foto publik yang diizinkan pengupload untuk template), atau foto privat yang permintaannya disetujui.
 
 function accessResolver(req, album) {
   const isOwner = !!(req.user && album.user_id === req.user.id);
@@ -30,7 +30,11 @@ function accessResolver(req, album) {
     const isUploader = photo.guest_id === req.guestId;
     const requestStatus = statusByPhoto.get(photo.id) || null;
     const canView = photo.visibility === 'public' || isOwner || isUploader || requestStatus === 'approved';
-    const canUse = isOwner || isUploader || (photo.visibility === 'public' && photo.allow_template === 1);
+    const canUse =
+      isOwner ||
+      isUploader ||
+      (photo.visibility === 'public' && photo.allow_template === 1) ||
+      (photo.visibility === 'private' && requestStatus === 'approved');
     return { isOwner, isUploader, requestStatus, canView, canUse };
   };
 }
