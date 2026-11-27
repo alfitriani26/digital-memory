@@ -259,3 +259,35 @@ input[type='file']::file-selector-button:hover { background: var(--accent-dark);
 .tpl-stage { position: relative; width: 100%; max-width: 340px; aspect-ratio: 4 / 5; margin: 0 auto; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); background: repeating-conic-gradient(#f3eef0 0% 25%, #fff 0% 50%) 50% / 16px 16px; user-select: none; touch-action: none; }
 .tpl-controls { display: flex; flex-direction: column; gap: 12px; }
 .tpl-panel { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- notifikasi (pemilik) ---------- */
+.bell { position: relative; background: none; border: 1px solid var(--line); border-radius: 999px; width: 38px; height: 38px; cursor: pointer; font-size: 1.05rem; line-height: 1; }
+.bell .dot { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; border-radius: 999px; font-size: 0.68rem; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font-weight: bold; }
+.notif-wrap { position: relative; }
+.notif-panel { position: absolute; right: 0; top: 46px; width: min(360px, 92vw); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 8px 28px rgba(43,36,48,.18); z-index: 60; overflow: hidden; }
+.notif-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.notif-list { max-height: 380px; overflow-y: auto; }
+.notif-item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); cursor: pointer; text-align: left; width: 100%; background: none; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: inherit; }
+.notif-item:hover { background: var(--accent-soft); }
+.notif-item.unread { background: #fff8fa; }
+.notif-item .ico { font-size: 1.2rem; flex: none; }
+.notif-empty { padding: 28px 14px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+.banner { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 90; background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 12px 10px 16px; display: flex; gap: 12px; align-items: center; width: min(520px, 92vw); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.banner .btn { flex: none; }
+.banner .x { background: none; border: 0; color: #fff; font-size: 1.3rem; cursor: pointer; flex: none; }
+
+/* ---------- sambutan tamu, banner status, daftar unggahan ---------- */
+.welcome { position: fixed; inset: 0; z-index: 80; background: linear-gradient(180deg, var(--accent-soft), var(--bg)); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.welcome-card { max-width: 420px; width: 100%; text-align: center; }
+.welcome-card h1 { font-size: 2rem; margin: 10px 0; }
+.status-banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; font-size: 0.92rem; }
+.status-banner.ok { background: #e9f6ef; color: #26704d; border: 1px solid #bfe3cf; }
+.status-banner.no { background: #fdecee; color: #9c2a38; border: 1px solid #f1c6cc; }
+.status-banner.closed { background: #fff4e0; color: #8a5a12; border: 1px solid #f3d9a8; }
+.status-banner button { margin-left: auto; background: none; border: 0; font-size: 1.2rem; cursor: pointer; color: inherit; }
+.upload-list { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; width: min(460px, 94vw); background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 28px rgba(43,36,48,.22); z-index: 70; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.upload-row { display: flex; flex-direction: column; gap: 4px; font-size: 0.88rem; }
+.upload-row .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.upload-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.upload-row.failed .name { color: var(--danger); }
+.upload-row.done .name { color: var(--ok); }
