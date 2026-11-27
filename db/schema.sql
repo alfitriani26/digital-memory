@@ -88,7 +88,19 @@ CREATE TABLE IF NOT EXISTS access_requests (
   UNIQUE (photo_id, guest_id)
 );
 
+-- Notifikasi untuk pemilik acara (permintaan akses, pesan, foto baru, batas waktu unggah)
+CREATE TABLE IF NOT EXISTS notifications (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL CHECK (type IN ('access_request', 'message', 'photo', 'closing')),
+  text       TEXT NOT NULL,
+  read_at    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Index supaya pencarian cepat
+CREATE INDEX IF NOT EXISTS idx_notif_user      ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_albums_user     ON albums(user_id);
 CREATE INDEX IF NOT EXISTS idx_photos_album    ON photos(album_id);
 CREATE INDEX IF NOT EXISTS idx_photos_guest    ON photos(guest_id);

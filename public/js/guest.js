@@ -33,6 +33,18 @@ function renderHero() {
     ${a.is_owner ? '<div class="small muted mt">Kamu melihat halaman ini sebagai pemilik acara.</div>' : ''}`;
   $('#bottombar').classList.remove('hidden');
   $('#btn-upload').disabled = !isOpen();
+  $('#btn-upload').textContent = isOpen() ? '📷 Unggah' : '🔒 Unggahan ditutup';
+  const nb = $('#notices');
+  if (nb) {
+    const old = $('#closed-notice');
+    if (!isOpen() && !old) {
+      const el = document.createElement('div');
+      el.id = 'closed-notice';
+      el.className = 'status-banner closed';
+      el.innerHTML = '<span>⏰</span><span><b>Unggahan ditutup.</b> Waktu mengunggah untuk album ini sudah berakhir, tapi kamu masih bisa melihat foto dan membaca pesan.</span>';
+      nb.prepend(el);
+    } else if (isOpen() && old) old.remove();
+  }
 }
 
 function showFatal(message) {
@@ -474,39 +486,86 @@ function queueUpload(files) {
 }
 
 async function runUploads(files, snap) {
+  // Daftar progres unggahan: tiap file punya bar, tombol Batal, dan tombol "Coba lagi" kalau gagal
   const panel = document.createElement('div');
-  panel.className = 'undo-bar';
-  panel.style.flexDirection = 'column';
-  panel.style.alignItems = 'stretch';
-  panel.innerHTML = '<span id="up-text"></span><div class="progress"><span id="up-bar"></span></div>';
+  panel.className = 'upload-list';
+  panel.innerHTML = '<div class="row-between"><b class="small" id="up-title"></b><button class="btn btn-sm" type="button" id="up-close" hidden>Tutup</button></div><div id="up-rows" class="stack" style="gap:10px"></div>';
   document.body.appendChild(panel);
+  const rowsBox = $('#up-rows', panel);
+  const jobs = files.map((file, i) => {
+    const row = document.createElement('div');
+    row.className = 'upload-row';
+    row.innerHTML = `<div class="top"><span class="name"></span><span class="small muted st">Menunggu</span><button class="btn btn-sm" type="button" data-act hidden></button></div><div class="progress"><span></span></div>`;
+    $('.name', row).textContent = file.name || 'Berkas ' + (i + 1);
+    rowsBox.appendChild(row);
+    return { file, row, index: i, status: 'wait', handle: {}, first: i === 0 };
+  });
+  let okCount = 0;
+  let stopAll = false;
 
-  let ok = 0;
-  for (let i = 0; i < files.length; i++) {
-    $('#up-text', panel).textContent = `Mengunggah ${i + 1} dari ${files.length}...`;
-    $('#up-bar', panel).style.width = '0';
+  const refreshTitle = () => {
+    const done = jobs.filter((j) => j.status === 'done').length;
+    const busyN = jobs.filter((j) => j.status === 'wait' || j.status === 'run').length;
+    $('#up-title', panel).textContent = busyN ? `Mengunggah ${done}/${jobs.length}...` : done === jobs.length ? 'Berhasil diunggah' : 'Sebagian gagal diunggah';
+    $('#up-close', panel).hidden = !!busyN;
+  };
+
+  async function runJob(job) {
+    const st = $('.st', job.row), bar = $('.progress span', job.row), act = $('[data-act]', job.row);
+    job.status = 'run';
+    job.row.className = 'upload-row';
+    st.textContent = '0%';
+    bar.style.width = '0';
+    act.hidden = false;
+    act.textContent = 'Batal';
+    act.onclick = () => job.handle.abort && job.handle.abort();
+    refreshTitle();
     try {
-      const file = await shrinkIfHuge(files[i]);
+      const file = await shrinkIfHuge(job.file);
       const fd = new FormData();
       fd.append('media', file);
       fd.append('visibility', snap.visibility);
       fd.append('allow_template', snap.allow_template && snap.visibility === 'public' ? '1' : '0');
       fd.append('guest_name', snap.name);
-      if (i === 0 && snap.text) fd.append('text', snap.text);
-      await uploadWithProgress(API + '/photos', fd, (pct) => ($('#up-bar', panel).style.width = pct + '%'));
-      ok++;
+      if (job.first && snap.text) fd.append('text', snap.text);
+      await uploadWithProgress(API + '/photos', fd, (pct) => { bar.style.width = pct + '%'; st.textContent = pct + '%'; }, job.handle);
+      job.status = 'done';
+      job.row.classList.add('done');
+      st.textContent = 'Selesai ✓';
+      bar.style.width = '100%';
+      act.hidden = true;
+      okCount++;
     } catch (e) {
-      toast(`${files[i].name || 'File'}: ${e.message}`, true);
-      if (e.status === 403) break; // waktu ditutup atau kapasitas penuh: berhenti
+      job.status = 'failed';
+      job.row.classList.add('failed');
+      st.textContent = e.aborted ? 'Dibatalkan' : e.message;
+      act.hidden = false;
+      act.textContent = 'Coba lagi';
+      act.onclick = async () => { await runJob(job); finish(); };
+      if (!e.aborted && e.status === 403) { stopAll = true; act.hidden = true; } // waktu ditutup atau kapasitas penuh
+    }
+    refreshTitle();
+  }
+
+  async function finish() {
+    if (okCount) {
+      prefs.text = '';
+      state.tab !== snap.visibility && state.tab !== 'messages' && showTab(snap.visibility);
+      await Promise.all([loadPhotos(), loadMessages()]).catch(() => {});
+    }
+    refreshTitle();
+    if (jobs.every((j) => j.status === 'done')) {
+      toast(jobs.length === 1 ? 'Foto terunggah. Terima kasih!' : `${jobs.length} file terunggah. Terima kasih!`);
+      setTimeout(() => panel.remove(), 1500);
     }
   }
-  panel.remove();
-  if (ok) {
-    prefs.text = '';
-    toast(ok === 1 ? 'Foto terunggah. Terima kasih!' : `${ok} file terunggah. Terima kasih!`);
-    state.tab !== snap.visibility && state.tab !== 'messages' && showTab(snap.visibility);
-    await Promise.all([loadPhotos(), loadMessages()]);
+
+  $('#up-close', panel).onclick = () => panel.remove();
+  for (const job of jobs) {
+    if (stopAll) { job.status = 'failed'; job.row.classList.add('failed'); $('.st', job.row).textContent = 'Tidak diunggah'; continue; }
+    await runJob(job);
   }
+  await finish();
 }
 
 // ---------- memuat data ----------
@@ -537,6 +596,56 @@ $('#btn-collage').addEventListener('click', () => {
   openStudio({ code, info: state.info, photos: state.photos });
 });
 
+// ---------- T-01: layar sambutan tamu (muncul sekali per sesi setelah scan QR / buka link) ----------
+function showWelcome() {
+  const a = state.info;
+  let seen = false;
+  try { seen = sessionStorage.getItem('dm_welcome_' + code) === '1'; } catch (e) { /* abaikan */ }
+  if (seen || a.is_owner) return;
+  const w = document.createElement('div');
+  w.className = 'welcome';
+  w.innerHTML = `<div class="welcome-card">
+    <div style="font-size:2.4rem">🎉</div>
+    <div class="small muted">${a.event_date ? esc(formatDate(a.event_date)) : 'Album acara'}</div>
+    <h1>${esc(a.title)}</h1>
+    <p class="muted">${esc(a.description || 'Selamat datang! Lihat dan bagikan momen acara di sini. Tanpa perlu membuat akun.')}</p>
+    <button class="btn btn-primary btn-block" type="button" id="enter-album">Masuk ke album</button>
+    <p class="small muted mt">${a.upload_open ? 'Kamu bisa mengunggah foto dan video sampai ' + esc(formatDateTime(a.upload_until)) + '.' : 'Unggahan sudah ditutup, tapi kamu masih bisa melihat album.'}</p>
+  </div>`;
+  document.body.appendChild(w);
+  $('#enter-album', w).onclick = () => {
+    try { sessionStorage.setItem('dm_welcome_' + code, '1'); } catch (e) { /* abaikan */ }
+    w.remove();
+  };
+}
+
+// ---------- T-05 / T-06: kabar keputusan pemilik atas permintaan akses ----------
+async function checkNotices() {
+  let list;
+  try { list = await api(API + '/notifications'); } catch (e) { return; }
+  const key = 'dm_seen_' + code;
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { /* abaikan */ }
+  const box = $('#notices');
+  if (!box) return;
+  list.forEach((n) => {
+    const tag = n.id + ':' + n.status;
+    if (seen.includes(tag) || document.getElementById('n-' + n.id)) return;
+    const ok = n.status === 'approved';
+    const el = document.createElement('div');
+    el.id = 'n-' + n.id;
+    el.className = 'status-banner ' + (ok ? 'ok' : 'no');
+    el.innerHTML = `<span>${ok ? '✅' : '⛔'}</span><span>${ok ? '<b>Akses disetujui.</b> Foto privat yang kamu minta kini terbuka.' : '<b>Akses ditolak.</b> Pemilik tidak membuka foto itu, jadi tetap buram.'}</span><button type="button" aria-label="Tutup">×</button>`;
+    $('button', el).onclick = () => {
+      el.remove();
+      seen.push(tag);
+      try { localStorage.setItem(key, JSON.stringify(seen.slice(-100))); } catch (e) { /* abaikan */ }
+    };
+    box.appendChild(el);
+    toast(ok ? 'Akses disetujui, foto terbuka.' : 'Permintaan akses ditolak.', !ok);
+  });
+}
+
 (async function init() {
   if (!code) return showFatal('Kode album tidak ditemukan.');
   try {
@@ -546,6 +655,7 @@ $('#btn-collage').addEventListener('click', () => {
   }
   renderHero();
   $('#content').classList.remove('hidden');
+  showWelcome();
   try {
     await Promise.all([loadPhotos(), loadMessages()]);
   } catch (e) {
@@ -553,6 +663,7 @@ $('#btn-collage').addEventListener('click', () => {
   }
   renderMessages();
   renderPhotos();
+  checkNotices();
 
   // Segarkan otomatis tiap 30 detik supaya foto baru dari tamu lain muncul
   setInterval(async () => {
@@ -561,6 +672,7 @@ $('#btn-collage').addEventListener('click', () => {
       state.info = await api(API);
       renderHero();
       await Promise.all([loadPhotos(), loadMessages()]);
+      await checkNotices();
     } catch (e) { /* abaikan, coba lagi nanti */ }
   }, 30000);
 })();

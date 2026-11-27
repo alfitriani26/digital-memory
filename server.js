@@ -24,6 +24,7 @@ app.use(loadOwner); // mengenali pemilik acara yang sedang login (req.user) di s
 // ---------- API ----------
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/albums', require('./routes/albums'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/a', require('./routes/guest'));
 app.use('/media', mediaRouter);
 

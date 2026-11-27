@@ -11,6 +11,7 @@ const sharp = require('sharp');
 const db = require('../db/database');
 const { PLANS, loadOwner, ensureGuest } = require('../middleware/auth');
 const { accessResolver } = require('./media');
+const { notifyOwner } = require('../db/notify');
 
 const router = express.Router();
 router.use(loadOwner);
@@ -230,6 +231,10 @@ router.post('/:code/photos', receiveFiles, async (req, res) => {
     }
 
     const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(photoId);
+    if (!(req.user && req.user.id === album.user_id)) {
+      notifyOwner(album.id, 'photo', `${guestName} mengunggah ${row.type === 'video' ? 'video' : 'foto'} baru ke album "${album.title}".`);
+      if (text || audioName) notifyOwner(album.id, 'message', `${guestName} mengirim pesan di album "${album.title}".`);
+    }
     res.status(201).json(photoView(photo, accessResolver(req, album)(photo)));
   } catch (e) {
     console.error(e);
@@ -273,7 +278,17 @@ router.post('/:code/photos/:id/request', (req, res) => {
   db.prepare('INSERT OR IGNORE INTO access_requests (photo_id, album_id, guest_id, guest_name) VALUES (?, ?, ?, ?)')
     .run(p.id, req.album.id, req.guestId, cleanName(req.body.guest_name));
   const row = db.prepare('SELECT status FROM access_requests WHERE photo_id = ? AND guest_id = ?').get(p.id, req.guestId);
+  if (row.status === 'pending') notifyOwner(req.album.id, 'access_request', `${cleanName(req.body.guest_name)} meminta akses ke foto privat di album "${req.album.title}".`);
   res.json({ status: row.status });
+});
+
+// Notifikasi untuk tamu: keputusan pemilik atas permintaan aksesnya (setuju / tolak)
+router.get('/:code/notifications', (req, res) => {
+  const rows = db
+    .prepare(`SELECT r.id, r.photo_id, r.status FROM access_requests r
+              WHERE r.album_id = ? AND r.guest_id = ? AND r.status != 'pending' ORDER BY r.id DESC LIMIT 20`)
+    .all(req.album.id, req.guestId);
+  res.json(rows.map((r) => ({ id: r.id, photo_id: r.photo_id, status: r.status })));
 });
 
 // ---------- pesan dan kesan (selalu publik) ----------
@@ -324,6 +339,7 @@ router.post('/:code/messages', receiveFiles, (req, res) => {
   const result = db
     .prepare('INSERT INTO messages (album_id, guest_id, guest_name, text, audio_filename) VALUES (?, ?, ?, ?, ?)')
     .run(album.id, req.guestId, cleanName(req.body.guest_name), text || null, audioName || null);
+  if (!(req.user && req.user.id === req.album.user_id)) notifyOwner(req.album.id, 'message', `${cleanName(req.body.guest_name)} mengirim pesan di album "${req.album.title}".`);
   res.status(201).json({ id: result.lastInsertRowid });
 });
 

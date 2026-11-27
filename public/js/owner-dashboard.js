@@ -8,6 +8,27 @@ function renderAccount() {
   $('#plan-detail').textContent = `Maksimal ${me.planInfo.maxPhotos} foto dan ${me.planInfo.maxTemplates} template untuk setiap album`;
 }
 
+// ---------- modal QR album ----------
+function openQrModal(album) {
+  const qrSrc = `/api/albums/${album.id}/qr.png?t=${Date.now()}`;
+  const qrDownload = `/api/albums/${album.id}/qr.png?download=1`;
+  const m = openModal(`
+    <div class="stack" style="align-items:center;text-align:center">
+      <h2 style="margin-bottom:4px">📸 QR Album</h2>
+      <div class="muted small" style="margin-bottom:12px"><b>${esc(album.title)}</b> · Kode <b>${esc(album.code)}</b></div>
+      <img src="${qrSrc}" alt="Kode QR album ${esc(album.title)}"
+           style="width:220px;height:220px;border-radius:12px;border:2px solid var(--border)" />
+      <div class="url-box" style="font-size:.8rem;word-break:break-all;margin:8px 0">${esc(album.guest_url)}</div>
+      <div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px">
+        <a class="btn btn-primary btn-sm" href="${qrDownload}" download="qr-${esc(album.code)}.png">⬇ Unduh QR</a>
+        <button class="btn btn-sm" type="button" id="qr-copy-link">🔗 Salin link</button>
+        <a class="btn btn-sm" href="/owner/album.html?id=${album.id}">Kelola album →</a>
+      </div>
+      <p class="hint" style="margin-top:8px">Cetak QR ini di undangan, tiket, atau tampilkan di layar supaya tamu bisa scan dan mengunggah foto.</p>
+    </div>`);
+  $('#qr-copy-link', m.box).addEventListener('click', () => copyText(album.guest_url, 'Link album disalin!'));
+}
+
 function albumCard(a) {
   const open = a.upload_open;
   const card = document.createElement('div');
@@ -31,10 +52,12 @@ function albumCard(a) {
       </div>
       <div class="row" style="margin-top:auto">
         <a class="btn btn-primary grow" href="/owner/album.html?id=${a.id}">Kelola</a>
+        <button class="btn btn-sm" type="button" data-qr title="Lihat QR">QR</button>
         <button class="btn" type="button" data-copy>Salin link</button>
       </div>
     </div>`;
-  $('[data-copy]', card).addEventListener('click', () => copyText(a.guest_url));
+  $('[data-copy]', card).addEventListener('click', () => copyText(a.guest_url, 'Link album disalin'));
+  $('[data-qr]', card).addEventListener('click', () => openQrModal(a));
   return card;
 }
 
@@ -51,6 +74,29 @@ async function loadAlbums() {
   } catch (e) {
     box.innerHTML = `<div class="alert alert-error" style="grid-column:1/-1">${esc(e.message)}</div>`;
   }
+}
+
+// Modal QR yang ditampilkan langsung setelah album berhasil dibuat
+function openNewAlbumQr(album) {
+  const qrSrc = `/api/albums/${album.id}/qr.png?t=${Date.now()}`;
+  const m = openModal(`
+    <div class="stack" style="align-items:center;text-align:center">
+      <div style="font-size:2rem">🎉</div>
+      <h2 style="margin:4px 0 2px">Album berhasil dibuat!</h2>
+      <div class="muted small" style="margin-bottom:12px"><b>${esc(album.title)}</b> · Kode <b>${esc(album.code)}</b></div>
+      <img src="${qrSrc}" alt="Kode QR album ${esc(album.title)}"
+           style="width:240px;height:240px;border-radius:14px;border:3px solid var(--accent)" />
+      <div class="url-box" style="font-size:.8rem;word-break:break-all;margin:10px 0">${esc(album.guest_url)}</div>
+      <div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px">
+        <a class="btn btn-primary" href="/api/albums/${album.id}/qr.png?download=1" download="qr-${esc(album.code)}.png">⬇ Unduh QR</a>
+        <button class="btn" type="button" id="qr-new-copy">🔗 Salin link tamu</button>
+      </div>
+      <div class="row" style="justify-content:center;margin-top:4px">
+        <a class="btn btn-sm" href="/owner/album.html?id=${album.id}">Kelola album →</a>
+      </div>
+      <p class="hint" style="margin-top:8px">Bagikan QR ini di undangan atau layar proyektor supaya tamu bisa scan dan mengunggah foto langsung.</p>
+    </div>`);
+  $('#qr-new-copy', m.box).addEventListener('click', () => copyText(album.guest_url, 'Link album disalin!'));
 }
 
 // ---------- buat album ----------
@@ -113,7 +159,10 @@ function openNewAlbum() {
           default_private: $('#f-private', m.box).checked,
         },
       });
-      location.href = '/owner/album.html?id=' + album.id;
+      // Tutup form buat album, lalu tampilkan QR modal langsung
+      m.close();
+      openNewAlbumQr(album);
+      loadAlbums(); // segarkan daftar album di background
     } catch (err) {
       error.textContent = err.message;
       error.classList.remove('hidden');
@@ -172,4 +221,5 @@ function openPlans() {
   $('#new-album').addEventListener('click', openNewAlbum);
   $('#change-plan').addEventListener('click', openPlans);
   loadAlbums();
+  document.addEventListener('notif:update', loadAlbums);
 })();

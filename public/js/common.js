@@ -44,9 +44,11 @@ async function api(url, options = {}) {
 }
 
 // Unggah dengan indikator kemajuan (fetch biasa tidak bisa menampilkan persen)
-function uploadWithProgress(url, formData, onProgress) {
+function uploadWithProgress(url, formData, onProgress, handle) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    if (handle) handle.abort = () => xhr.abort(); // supaya unggahan bisa dibatalkan
+    xhr.onabort = () => { const err = new Error('Dibatalkan'); err.aborted = true; reject(err); };
     xhr.open('POST', url);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
@@ -168,7 +170,7 @@ function setAccent(color) {
 }
 
 // ---------- lain-lain ----------
-async function copyText(text) {
+async function copyText(text, message) {
   try {
     await navigator.clipboard.writeText(text);
   } catch (e) {
@@ -179,7 +181,7 @@ async function copyText(text) {
     document.execCommand('copy');
     ta.remove();
   }
-  toast('Tersalin!');
+  toast(message || 'Tersalin!');
 }
 
 // Untuk halaman pemilik: kalau belum login, kembali ke halaman login

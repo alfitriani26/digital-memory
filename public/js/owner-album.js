@@ -367,7 +367,7 @@ function renderSettings() {
       <div><button class="btn btn-danger" type="button" id="del-album">Hapus album ini</button></div>
     </div>`;
 
-  $('#copy-url', box).addEventListener('click', () => copyText(a.guest_url));
+  $('#copy-url', box).addEventListener('click', () => copyText(a.guest_url, 'Link album disalin'));
 
   $('#w-open', box).addEventListener('click', () => patchAlbum({ upload_days_from_now: Number($('#w-days', box).value) || 1 }, 'Waktu unggah diperbarui.'));
   $('#w-close', box).addEventListener('click', () => {
@@ -390,13 +390,30 @@ function renderSettings() {
     );
   });
 
-  $('#del-album', box).addEventListener('click', async () => {
-    if (!confirm(`Hapus album "${a.title}" beserta semua isinya? Tindakan ini tidak bisa dibatalkan.`)) return;
+  $('#del-album', box).addEventListener('click', () => confirmDeleteAlbum(a));
+}
+
+// Dialog konfirmasi hapus album (wajib mencentang persetujuan)
+function confirmDeleteAlbum(a) {
+  const m = openModal(`
+    <h2>Hapus album ini?</h2>
+    <p class="muted">Album <b>${esc(a.title)}</b> beserta ${state.photos.length} foto/video, ${state.messages.length} pesan, dan template di dalamnya akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.</p>
+    <label class="check"><input id="del-ok" type="checkbox" /><span>Saya mengerti dan ingin menghapus album ini</span></label>
+    <div class="row mt">
+      <button class="btn grow" type="button" data-cancel>Batal</button>
+      <button class="btn btn-danger grow" type="button" data-go disabled>Hapus</button>
+    </div>`);
+  const go = $('[data-go]', m.box);
+  $('#del-ok', m.box).addEventListener('change', (e) => (go.disabled = !e.target.checked));
+  $('[data-cancel]', m.box).addEventListener('click', m.close);
+  go.addEventListener('click', async () => {
+    go.disabled = true;
     try {
       await api(API, { method: 'DELETE' });
       location.href = '/owner/dashboard.html';
     } catch (e) {
       toast(e.message, true);
+      go.disabled = false;
     }
   });
 }
@@ -442,6 +459,11 @@ async function loadTemplates() {
   } catch (e) {
     toast(e.message, true);
   }
+  // Segarkan data saat ada notifikasi baru (permintaan akses, pesan, foto)
+  document.addEventListener('notif:update', () => {
+    if ($('.modal')) return;
+    Promise.all([loadPhotos(), loadRequests(), loadMessages()]).catch(() => {});
+  });
   const wanted = location.hash.replace('#', '');
   if (['photos', 'requests', 'messages', 'templates', 'settings'].includes(wanted)) showTab(wanted);
 })();
