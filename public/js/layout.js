@@ -243,17 +243,29 @@ function drawCollage(canvas, options) {
   const ctx = canvas.getContext('2d');
   const { images, layout, template, bgImage, caption } = options;
   const hasTemplate = !!template;
-  drawTemplateBackground(ctx, template, bgImage);
-  if (hasTemplate && template.kind === 'image') {
-    // gradasi gelap di bawah supaya tulisan putih mudah dibaca di atas gambar apa pun
-    const g = ctx.createLinearGradient(0, CH - 330, 0, CH);
-    g.addColorStop(0, 'rgba(0,0,0,0)');
-    g.addColorStop(1, 'rgba(0,0,0,0.55)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, CH - 330, CW, 330);
+  const customCfg =
+    hasTemplate && template.layout_config && Array.isArray(template.layout_config.slots) && template.layout_config.slots.length
+      ? template.layout_config
+      : null;
+  const isOverlay = Boolean(customCfg && customCfg.overlay && template.kind === 'image' && bgImage);
+
+  if (isOverlay) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, CW, CH);
+  } else {
+    drawTemplateBackground(ctx, template, bgImage);
+    if (hasTemplate && template.kind === 'image') {
+      // gradasi gelap di bawah supaya tulisan putih mudah dibaca di atas gambar apa pun
+      const g = ctx.createLinearGradient(0, CH - 330, 0, CH);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, CH - 330, CW, 330);
+    }
   }
 
   if (!images.length) {
+    if (isOverlay) drawTemplateBackground(ctx, template, bgImage);
     ctx.fillStyle = hasTemplate && template.kind === 'theme' && template.theme_key === 'elegant' ? '#d8b96e' : '#8a7f8e';
     ctx.font = "40px system-ui, 'Segoe UI', sans-serif";
     ctx.textAlign = 'center';
@@ -262,37 +274,49 @@ function drawCollage(canvas, options) {
     return;
   }
 
-  const def = LAYOUTS[layout] || LAYOUTS['1'];
-  const area = hasTemplate ? { x: 90, y: 110, w: 900, h: 1010 } : { x: 30, y: 30, w: 1020, h: 1290 };
-  const gap = hasTemplate ? 22 : 10;
-  let frame = { color: '#ffffff', border: 0, radius: 0 };
-  let captionColor = '#7a7280';
-  if (hasTemplate) {
-    if (template.kind === 'theme' && THEMES[template.theme_key]) {
-      frame = THEMES[template.theme_key].frame;
-      captionColor = THEMES[template.theme_key].text;
-    } else {
-      frame = { color: '#ffffff', border: 12, radius: 14 };
-      captionColor = '#ffffff';
+  if (customCfg) {
+    const f = customCfg.frame || { color: '#ffffff', border: 12, radius: 14, shadow: true };
+    customCfg.slots.forEach((slot, i) => {
+      const img = images[i];
+      if (!img) return;
+      const r = { x: slot.x * CW, y: slot.y * CH, w: slot.w * CW, h: slot.h * CH };
+      drawPhoto(ctx, img, r, f, f.shadow !== false);
+    });
+    if (isOverlay) drawTemplateBackground(ctx, template, bgImage);
+  } else {
+    const def = LAYOUTS[layout] || LAYOUTS['1'];
+    const area = hasTemplate ? { x: 90, y: 110, w: 900, h: 1010 } : { x: 30, y: 30, w: 1020, h: 1290 };
+    const gap = hasTemplate ? 22 : 10;
+    let frame = { color: '#ffffff', border: 0, radius: 0 };
+    if (hasTemplate) {
+      if (template.kind === 'theme' && THEMES[template.theme_key]) {
+        frame = THEMES[template.theme_key].frame;
+      } else {
+        frame = { color: '#ffffff', border: 12, radius: 14 };
+      }
     }
+
+    def.slots.forEach((slot, i) => {
+      const img = images[i];
+      if (!img) return;
+      // Celah antar foto: hanya sisi yang bersebelahan dengan kotak lain yang dikecilkan setengah celah
+      let x0 = area.x + slot[0] * area.w;
+      let x1 = x0 + slot[2] * area.w;
+      let y0 = area.y + slot[1] * area.h;
+      let y1 = y0 + slot[3] * area.h;
+      if (slot[0] > 0.001) x0 += gap / 2;
+      if (slot[0] + slot[2] < 0.999) x1 -= gap / 2;
+      if (slot[1] > 0.001) y0 += gap / 2;
+      if (slot[1] + slot[3] < 0.999) y1 -= gap / 2;
+      const r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      drawPhoto(ctx, img, r, frame, hasTemplate);
+    });
   }
 
-  def.slots.forEach((slot, i) => {
-    const img = images[i];
-    if (!img) return;
-    // Celah antar foto: hanya sisi yang bersebelahan dengan kotak lain yang dikecilkan setengah celah
-    let x0 = area.x + slot[0] * area.w;
-    let x1 = x0 + slot[2] * area.w;
-    let y0 = area.y + slot[1] * area.h;
-    let y1 = y0 + slot[3] * area.h;
-    if (slot[0] > 0.001) x0 += gap / 2;
-    if (slot[0] + slot[2] < 0.999) x1 -= gap / 2;
-    if (slot[1] > 0.001) y0 += gap / 2;
-    if (slot[1] + slot[3] < 0.999) y1 -= gap / 2;
-    const r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-    drawPhoto(ctx, img, r, frame, hasTemplate);
-  });
-
+  let captionColor = '#7a7280';
+  if (hasTemplate) {
+    captionColor = template.kind === 'theme' && THEMES[template.theme_key] ? THEMES[template.theme_key].text : '#ffffff';
+  }
   if (hasTemplate) drawCaption(ctx, caption, captionColor);
 }
 
@@ -323,6 +347,13 @@ function openStudio({ code, info, photos }) {
   const box = m.box;
   const canvas = $('#s-canvas', box);
 
+  const activeCustom = () => {
+    const tpl = st.tpl >= 0 ? templates[st.tpl] : null;
+    return tpl && tpl.layout_config && Array.isArray(tpl.layout_config.slots) && tpl.layout_config.slots.length
+      ? tpl.layout_config
+      : null;
+  };
+
   // 1. pilih foto
   const pickGrid = $('#s-pick', box);
   if (!usable.length) {
@@ -334,9 +365,11 @@ function openStudio({ code, info, photos }) {
       b.className = 'pick';
       b.innerHTML = `<img src="${esc(p.thumb_url)}" alt="" /><span class="n hidden"></span>`;
       b.addEventListener('click', () => {
+        const custom = activeCustom();
+        const maxPick = custom ? custom.slots.length : MAX_PICK;
         const i = st.picked.indexOf(p.id);
         if (i >= 0) st.picked.splice(i, 1);
-        else if (st.picked.length >= MAX_PICK) return toast(`Maksimal ${MAX_PICK} foto.`, true);
+        else if (st.picked.length >= maxPick) return toast(custom ? `Template ini memakai ${maxPick} foto.` : `Maksimal ${MAX_PICK} foto.`, true);
         else st.picked.push(p.id);
         syncPicks();
       });
@@ -346,6 +379,10 @@ function openStudio({ code, info, photos }) {
   }
 
   function syncPicks() {
+    const custom = activeCustom();
+    if (custom && st.picked.length > custom.slots.length) {
+      st.picked.length = custom.slots.length;
+    }
     $$('.pick', box).forEach((b) => {
       const i = st.picked.indexOf(Number(b.dataset.id));
       b.classList.toggle('on', i >= 0);
@@ -353,15 +390,19 @@ function openStudio({ code, info, photos }) {
       n.classList.toggle('hidden', i < 0);
       n.textContent = i + 1;
     });
-    const options = layoutsFor(st.picked.length);
-    if (!options.includes(st.layout)) st.layout = options[0] || null;
-    renderLayouts(options);
+    const options = custom ? [] : layoutsFor(st.picked.length);
+    if (!custom && !options.includes(st.layout)) st.layout = options[0] || null;
+    renderLayouts(options, custom);
     render();
   }
 
   // 2. layout
-  function renderLayouts(options) {
+  function renderLayouts(options, custom) {
     const row = $('#s-layouts', box);
+    if (custom) {
+      row.innerHTML = `<span class="hint">Otomatis mengikuti posisi &amp; gaya slot template (butuh <b>${custom.slots.length}</b> foto).</span>`;
+      return;
+    }
     if (!st.picked.length) {
       row.innerHTML = '<span class="hint">Pilih foto dulu. Pilihan layout menyesuaikan jumlah fotonya.</span>';
       return;
@@ -376,7 +417,7 @@ function openStudio({ code, info, photos }) {
       c.type = 'button';
       c.className = 'chip' + (key === st.layout ? ' active' : '');
       c.textContent = LAYOUTS[key].label;
-      c.addEventListener('click', () => { st.layout = key; renderLayouts(options); render(); });
+      c.addEventListener('click', () => { st.layout = key; renderLayouts(options, null); render(); });
       row.appendChild(c);
     });
   }
@@ -401,7 +442,7 @@ function openStudio({ code, info, photos }) {
         $('#s-caption', box).value = st.caption;
       }
       $('#s-caption-box', box).classList.toggle('hidden', index < 0);
-      render();
+      syncPicks();
     });
     tplGrid.appendChild(b);
   }
@@ -448,7 +489,9 @@ function openStudio({ code, info, photos }) {
         template && template.kind === 'image' ? loadImage(template.image_url) : Promise.resolve(null),
       ]);
       if (token !== st.token) return; // pilihan sudah berubah lagi, abaikan hasil lama
-      const ready = images.length > 0 && images.length === (LAYOUTS[st.layout] || { slots: [] }).slots.length;
+      const custom = activeCustom();
+      const targetCount = custom ? custom.slots.length : (LAYOUTS[st.layout] || { slots: [] }).slots.length;
+      const ready = images.length > 0 && images.length === targetCount;
       drawCollage(canvas, { images: ready ? images : [], layout: st.layout, template, bgImage, caption: st.caption });
       $('#s-download', box).disabled = !ready;
       $('#s-share', box).disabled = !ready;

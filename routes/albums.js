@@ -291,6 +291,34 @@ router.post('/:id/requests/:rid', (req, res) => {
 
 // ---------- template ----------
 
+function parseLayoutConfig(raw) {
+  if (!raw) return null;
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!obj || !Array.isArray(obj.slots) || !obj.slots.length || obj.slots.length > 6) return null;
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, Number(v) || 0));
+    const round4 = (v) => Math.round(v * 10000) / 10000;
+    const slots = obj.slots.map((s) => {
+      const w = round4(clamp(s.w, 0.05, 1));
+      const h = round4(clamp(s.h, 0.05, 1));
+      const x = round4(clamp(s.x, 0, 1 - w));
+      const y = round4(clamp(s.y, 0, 1 - h));
+      return { x, y, w, h };
+    });
+    const f = obj.frame || {};
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(f.color || '')) ? String(f.color) : '#ffffff';
+    const frame = {
+      color,
+      border: Math.round(clamp(f.border ?? 12, 0, 40)),
+      radius: Math.round(clamp(f.radius ?? 14, 0, 80)),
+      shadow: f.shadow !== false,
+    };
+    return { slots, frame, overlay: Boolean(obj.overlay) };
+  } catch {
+    return null;
+  }
+}
+
 function templateView(t) {
   return {
     id: t.id,
@@ -299,6 +327,7 @@ function templateView(t) {
     theme_key: t.theme_key,
     caption: t.caption,
     image_url: t.kind === 'image' ? `/media/template/${t.id}` : null,
+    layout_config: parseLayoutConfig(t.layout_config),
   };
 }
 
@@ -310,6 +339,18 @@ router.get('/:id/templates', (req, res) => {
     themeKeys: THEME_KEYS,
   });
 });
+
+async function saveTemplateImage(albumId, buffer) {
+  const dir = path.join(UPLOADS_DIR, String(albumId));
+  fs.mkdirSync(dir, { recursive: true });
+  const meta = await sharp(buffer).metadata();
+  const keepPng = Boolean(meta.hasAlpha || meta.format === 'png');
+  const filename = `tpl_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.${keepPng ? 'png' : 'jpg'}`;
+  const pipeline = sharp(buffer).rotate().resize(1080, 1350, { fit: 'cover' });
+  if (keepPng) await pipeline.png({ compressionLevel: 9 }).toFile(path.join(dir, filename));
+  else await pipeline.jpeg({ quality: 88 }).toFile(path.join(dir, filename));
+  return filename;
+}
 
 router.post('/:id/templates', receiveImage('image'), async (req, res) => {
   try {
@@ -331,23 +372,55 @@ router.post('/:id/templates', receiveImage('image'), async (req, res) => {
       if (!THEME_KEYS.includes(themeKey)) return res.status(400).json({ error: 'Pilih salah satu tema bawaan.' });
     } else {
       if (!req.file) return res.status(400).json({ error: 'Pilih gambar background terlebih dahulu.' });
-      const dir = path.join(UPLOADS_DIR, String(req.album.id));
-      fs.mkdirSync(dir, { recursive: true });
-      filename = `tpl_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.jpg`;
-      await sharp(req.file.buffer)
-        .rotate()
-        .resize(1080, 1350, { fit: 'cover' })
-        .jpeg({ quality: 88 })
-        .toFile(path.join(dir, filename));
+      filename = await saveTemplateImage(req.album.id, req.file.buffer);
     }
 
+    const layoutConfig = kind === 'image' ? parseLayoutConfig(req.body.layout_config) : null;
     const result = db
-      .prepare('INSERT INTO templates (album_id, name, kind, theme_key, filename, caption) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(req.album.id, name, kind, kind === 'theme' ? themeKey : null, filename, caption || null);
+      .prepare('INSERT INTO templates (album_id, name, kind, theme_key, filename, caption, layout_config) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(req.album.id, name, kind, kind === 'theme' ? themeKey : null, filename, caption || null, layoutConfig ? JSON.stringify(layoutConfig) : null);
     res.status(201).json(templateView(db.prepare('SELECT * FROM templates WHERE id = ?').get(result.lastInsertRowid)));
   } catch (e) {
     console.error(e);
     res.status(400).json({ error: 'Gambar tidak bisa diproses. Coba file JPG atau PNG lain.' });
+  }
+});
+
+router.put('/:id/templates/:tid', receiveImage('image'), async (req, res) => {
+  try {
+    const t = db.prepare('SELECT * FROM templates WHERE id = ? AND album_id = ?').get(Number(req.params.tid), req.album.id);
+    if (!t) return res.status(404).json({ error: 'Template tidak ditemukan.' });
+
+    const name = String(req.body.name || '').trim();
+    const caption = String(req.body.caption || '').trim().slice(0, 80);
+    const kind = req.body.kind === 'image' ? 'image' : 'theme';
+    const themeKey = String(req.body.theme_key || '');
+
+    if (!name || name.length > 40) return res.status(400).json({ error: 'Nama template wajib diisi (maksimal 40 huruf).' });
+
+    let filename = t.filename;
+    if (kind === 'theme') {
+      if (!THEME_KEYS.includes(themeKey)) return res.status(400).json({ error: 'Pilih salah satu tema bawaan.' });
+      if (t.filename) removeFiles(req.album.id, [t.filename]);
+      filename = null;
+    } else {
+      if (req.file) {
+        const nextFile = await saveTemplateImage(req.album.id, req.file.buffer);
+        if (t.filename) removeFiles(req.album.id, [t.filename]);
+        filename = nextFile;
+      } else if (t.kind !== 'image' || !filename) {
+        return res.status(400).json({ error: 'Pilih gambar background terlebih dahulu.' });
+      }
+    }
+
+    const layoutConfig = kind === 'image' ? parseLayoutConfig(req.body.layout_config) : null;
+    db.prepare('UPDATE templates SET name = ?, kind = ?, theme_key = ?, filename = ?, caption = ?, layout_config = ? WHERE id = ?')
+      .run(name, kind, kind === 'theme' ? themeKey : null, filename, caption || null, layoutConfig ? JSON.stringify(layoutConfig) : null, t.id);
+
+    res.json(templateView(db.prepare('SELECT * FROM templates WHERE id = ?').get(t.id)));
+  } catch (e) {
+    console.error(e);
+    res.status(400).json({ error: 'Template gagal diperbarui. Coba file JPG atau PNG lain.' });
   }
 });
 

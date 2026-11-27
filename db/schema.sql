@@ -37,14 +37,15 @@ CREATE TABLE IF NOT EXISTS albums (
 
 -- Template tata letak buatan pemilik (tema bawaan atau gambar background sendiri)
 CREATE TABLE IF NOT EXISTS templates (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  kind       TEXT NOT NULL DEFAULT 'theme' CHECK (kind IN ('theme', 'image')),
-  theme_key  TEXT,
-  filename   TEXT,
-  caption    TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  album_id      INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  kind          TEXT NOT NULL DEFAULT 'theme' CHECK (kind IN ('theme', 'image')),
+  theme_key     TEXT,
+  filename      TEXT,
+  caption       TEXT,
+  layout_config TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Foto dan video yang diunggah tamu atau pemilik

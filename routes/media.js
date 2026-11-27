@@ -64,7 +64,7 @@ router.get('/template/:tid(\\d+)', (req, res) => {
   if (!t || !t.filename) return res.status(404).end();
   const p = filePath(t.album_id, t.filename);
   if (!fs.existsSync(p)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(p);
 });
 
@@ -75,7 +75,7 @@ router.get('/message/:mid(\\d+)/audio', (req, res) => {
   if (!m || !m.audio_filename) return res.status(404).end();
   const p = filePath(m.album_id, m.audio_filename);
   if (!fs.existsSync(p)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(p);
 });
 
